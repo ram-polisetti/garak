@@ -53,8 +53,13 @@ class Buff(Configurable):
             probe_classname=source_attempt.probe_classname,
             probe_params=source_attempt.probe_params,
             targets=source_attempt.targets,
-            notes=source_attempt.notes,
-            detector_results=source_attempt.detector_results,
+            # each derived attempt must own its notes and detector_results:
+            # detector scores are written per-attempt by the harness, so
+            # sharing these dicts makes siblings overwrite each other's
+            # scores (and leaks buff metadata onto the source attempt).
+            # ref NVIDIA/garak#2155
+            notes=dict(source_attempt.notes),
+            detector_results=dict(source_attempt.detector_results),
             goal=source_attempt.goal,
             seq=seq,
         )
