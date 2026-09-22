@@ -399,6 +399,13 @@ class Probe(Configurable):
             colour=f"#{garak.resources.theme.LANGPROVIDER_RGB}",
             desc="Preparing prompts",
         )
+        if not prompts:
+            # an empty prompt set can arise e.g. when prompt translation
+            # produces no prompts; running zero attempts is the sane outcome,
+            # not an IndexError deep in the execution path (NVIDIA/garak#2026)
+            preparation_bar.close()
+            logging.warning("probe %s has an empty prompt set", self.probename)
+            return []
         if isinstance(prompts[0], str):  # self.prompts can be strings
             localized_prompts = self.langprovider.get_text(
                 prompts, notify_callback=preparation_bar.update
