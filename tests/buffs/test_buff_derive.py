@@ -95,3 +95,46 @@ def test_buff_hook_siblings_do_not_share_state():
     assert orig.detector_results["always.Fail"] == [1.0], (
         "harness-style per-attempt score writes must not leak across siblings"
     )
+
+
+def test_chained_derivation_grandchild_isolated(buff, source_attempt):
+    # buffs stack, so derivation-of-a-derivation must isolate too
+    child = buff._derive_new_attempt(source_attempt)
+    grandchild = buff._derive_new_attempt(child)
+    child.detector_results["always.Fail"] = [0.5]
+    grandchild.detector_results["always.Fail"] = [0.0]
+    assert child.detector_results["always.Fail"] == [0.5], (
+        "child score must survive a grandchild write"
+    )
+    assert grandchild.detector_results["always.Fail"] == [0.0]
+    assert source_attempt.detector_results["always.Fail"] == [1.0], (
+        "source score must survive chained derivation writes"
+    )
+    assert "buff_creator" not in source_attempt.notes, (
+        "chained derivation must not pollute the source attempt"
+    )
+
+
+def test_nested_notes_list_isolated_after_fresh_assign(buff, source_attempt):
+    # mirrors detectors/packagehallucination.py: fresh list assigned to
+    # notes before appending, so the shallow copy is enough here
+    source_attempt.notes["hallucinated_python_packages"] = ["legit-pkg"]
+    derived = buff._derive_new_attempt(source_attempt)
+    derived.notes["hallucinated_python_packages"] = []
+    derived.notes["hallucinated_python_packages"].append(["evil-pkg"])
+    assert source_attempt.notes["hallucinated_python_packages"] == ["legit-pkg"], (
+        "fresh-assign-then-append on a derived attempt must not touch the source list"
+    )
+
+
+def test_generation_outputs_do_not_leak_into_source_conversations(
+    buff, source_attempt
+):
+    # the prompt setter deep-copies, so per-attempt output writes
+    # (which append turns to conversations) stay per-attempt
+    derived = buff._derive_new_attempt(source_attempt)
+    source_turns_before = len(source_attempt.conversations[0].turns)
+    derived.outputs = ["a generated response"]
+    assert len(source_attempt.conversations[0].turns) == source_turns_before, (
+        "writing outputs on a derived attempt must not append to source conversations"
+    )
