@@ -38,6 +38,15 @@ class _SinglePromptProbe(garak.probes.base.Probe):
     tags = []
 
 
+class _BlankPromptProbe(garak.probes.base.Probe):
+    """Prompts that are empty/whitespace strings: not an empty *set*."""
+
+    prompts = ["", "   "]
+    doc_uri = ""
+    primary_detector = "always.Pass"
+    tags = []
+
+
 def test_probe_empty_prompt_set_returns_no_attempts(caplog):
     """Empty prompt set -> warning naming the probe, returns []."""
     probe = _EmptyPromptProbe()
@@ -65,3 +74,22 @@ def test_probe_nonempty_prompt_set_unaffected():
         pytest.fail(f"non-empty prompt set wrongly treated as empty: {e}")
     except Exception:
         pass  # downstream generator stubbing is out of scope for this guard
+
+
+def test_probe_blank_prompts_not_treated_as_empty_set(caplog):
+    """The guard fires on set emptiness, not on blank prompt content.
+
+    ["", "   "] is a non-empty prompt set, so it must sail past the
+    empty-set guard: no warning, no early return. Execution then proceeds
+    into normal prompt preparation; the stub generator failing downstream
+    (AttributeError from None.generate()) is out of scope, as above.
+    """
+    probe = _BlankPromptProbe()
+    with caplog.at_level(logging.WARNING):
+        try:
+            probe.probe(generator=None)
+        except AttributeError:
+            pass  # None.generate() in _execute_attempt; guard already passed
+    assert not any(
+        "empty prompt set" in record.message for record in caplog.records
+    ), "blank prompts must not trigger the empty-set warning"
